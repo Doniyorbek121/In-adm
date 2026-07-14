@@ -2,7 +2,7 @@
 
 Instagram, Facebook va WhatsApp uchun **AI asosidagi avtomatik javob beruvchi bot**. Rasmiy Meta Graph API asosida ishlaydi — akkauntingiz blok bo'lish xavfi yo'q.
 
-**Har kim o'z biznesiga moslashtira oladi**: `business.md` fayliga biznesingiz haqida yozasiz (mahsulotlar, narxlar, manzil, yetkazib berish...) — AI (Claude) mijozlarga aynan shu ma'lumot asosida, mijozning tilida javob beradi. AI kaliti bo'lmasa, bot `rules.json` dagi kalit so'z qoidalari bilan ishlashda davom etadi.
+**Har kim o'z biznesiga moslashtira oladi**: `business.md` fayliga biznesingiz haqida yozasiz (mahsulotlar, narxlar, manzil, yetkazib berish...) — AI mijozlarga aynan shu ma'lumot asosida, mijozning tilida javob beradi. AI sifatida **Gemini** (bepul tarifi bor) yoki **Claude** ishlatish mumkin. AI kaliti bo'lmasa, bot `rules.json` dagi kalit so'z qoidalari bilan ishlashda davom etadi.
 
 ## Nimalarni qiladi
 
@@ -16,7 +16,7 @@ Instagram, Facebook va WhatsApp uchun **AI asosidagi avtomatik javob beruvchi bo
 
 ## Javoblar qanday tanlanadi
 
-1. **AI rejimi** (`ANTHROPIC_API_KEY` berilgan bo'lsa): Claude `business.md` dagi ma'lumotlar asosida javob yozadi. Har bir mijoz bilan suhbat tarixini eslab qoladi (oxirgi 10 xabar), shuning uchun "narxi qancha?" → "qaysi mahsulot?" → "erkaklar ko'ylagi" kabi tabiiy suhbat bo'ladi. Mijoz qaysi tilda yozsa (o'zbek/rus/ingliz), o'sha tilda javob oladi.
+1. **AI rejimi** (`GEMINI_API_KEY` yoki `ANTHROPIC_API_KEY` berilgan bo'lsa): AI `business.md` dagi ma'lumotlar asosida javob yozadi. Har bir mijoz bilan suhbat tarixini eslab qoladi (oxirgi 10 xabar), shuning uchun "narxi qancha?" → "qaysi mahsulot?" → "erkaklar ko'ylagi" kabi tabiiy suhbat bo'ladi. Mijoz qaysi tilda yozsa (o'zbek/rus/ingliz), o'sha tilda javob oladi.
 2. **Kalit so'z rejimi** (AI kaliti yo'q bo'lsa yoki AI'da xato bo'lsa): `rules.json` dagi qoidalar ishlaydi — mijoz "narx" deb yozsa narx haqidagi javob ketadi. Bot hech qachon javobsiz qolmaydi.
 
 ## Talablar
@@ -45,8 +45,12 @@ npm start
 | `IG_USER_ID` | Instagram Business akkaunt ID'si (`me/accounts` orqali topiladi) |
 | `WHATSAPP_TOKEN` | Meta App → WhatsApp → API Setup |
 | `WHATSAPP_PHONE_NUMBER_ID` | Meta App → WhatsApp → API Setup → Phone number ID |
-| `ANTHROPIC_API_KEY` | [platform.claude.com](https://platform.claude.com) → API Keys. Ixtiyoriy — bo'lmasa bot kalit so'z rejimida ishlaydi |
-| `AI_MODEL` | Ixtiyoriy, standart: `claude-opus-4-8` |
+| `GEMINI_API_KEY` | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) — bepul tarif bor. Ixtiyoriy |
+| `GEMINI_MODEL` | Ixtiyoriy, standart: `gemini-2.5-flash` |
+| `ANTHROPIC_API_KEY` | [platform.claude.com](https://platform.claude.com) → API Keys. Ixtiyoriy |
+| `AI_MODEL` | Claude modeli, ixtiyoriy, standart: `claude-opus-4-8` |
+
+AI provayderi avtomatik tanlanadi: `GEMINI_API_KEY` bo'lsa Gemini, bo'lmasa `ANTHROPIC_API_KEY` bo'lsa Claude, ikkalasi ham bo'lmasa kalit so'z rejimi.
 
 ## AI'ni o'z biznesingizga o'rgatish
 

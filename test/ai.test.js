@@ -4,11 +4,13 @@ import assert from "node:assert";
 // Testda API kalit yo'q — AI o'chiq bo'lishi va kalit so'z
 // qoidalariga qaytishi (fallback) tekshiriladi
 delete process.env.ANTHROPIC_API_KEY;
+delete process.env.GEMINI_API_KEY;
 
-const { aiEnabled, generateReply } = await import("../src/ai.js");
+const { aiEnabled, aiProvider, generateReply } = await import("../src/ai.js");
 
 test("API kalit bo'lmasa AI o'chiq bo'ladi", () => {
   assert.strictEqual(aiEnabled, false);
+  assert.strictEqual(aiProvider, "none");
 });
 
 test("AI o'chiq bo'lsa kalit so'z qoidasi ishlaydi", async () => {
