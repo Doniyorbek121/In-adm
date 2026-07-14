@@ -7,6 +7,7 @@ import {
   requireAuth,
   requireAdmin,
   isAdmin,
+  changePassword,
 } from "../auth.js";
 import { updateUser, listUsers, findUserById, persist } from "../db.js";
 import { config } from "../config.js";
@@ -171,11 +172,34 @@ web.get("/dashboard", requireAuth, (req, res) => {
         .join("")
     : `<p class="hint">Kutayotgan murojaat yo'q ✨</p>`;
 
+  // Boshlang'ich yo'riq — hali bajarilmagan qadamlar ko'rsatiladi
+  const steps = [
+    { done: Boolean(u.businessInfo), label: "AI'ni biznesingizga o'rgating (pastda)" },
+    {
+      done: Boolean(u.meta.pageAccessToken || u.meta.whatsappToken),
+      label: "Ijtimoiy tarmoqlarni ulang (biz sozlaymiz — bog'laning)",
+    },
+    { done: sub.active, label: "Obunani faollashtiring" },
+  ];
+  const allDone = steps.every((s) => s.done);
+  const checklist = allDone
+    ? ""
+    : `<div class="card" style="border-left:4px solid var(--brand)">
+        <h2>🚀 Boshlash uchun qadamlar</h2>
+        ${steps
+          .map(
+            (s) =>
+              `<div style="padding:4px 0">${s.done ? "✅" : "⬜️"} <span style="${s.done ? "color:var(--muted);text-decoration:line-through" : ""}">${esc(s.label)}</span></div>`
+          )
+          .join("")}
+      </div>`;
+
   res.send(
     page(
       "Boshqaruv",
       `${saved ? `<div class="ok">Saqlandi ✅</div>` : ""}
       ${subBanner}
+      ${checklist}
 
       <div class="card">
         <h1>${esc(u.businessName || "Biznesim")}</h1>
@@ -312,6 +336,44 @@ web.post("/settings/business", requireAuth, (req, res) => {
   });
   res.redirect("/dashboard?saved=1");
 });
+
+// ==== Akkaunt sahifasi (parol o'zgartirish) ====
+
+web.get("/account", requireAuth, (req, res) => {
+  res.send(accountPage(req.user));
+});
+
+web.post("/account/password", requireAuth, (req, res) => {
+  const { oldPassword, newPassword } = req.body || {};
+  const result = changePassword(req.user, oldPassword, newPassword);
+  if (result.error) return res.send(accountPage(req.user, result.error));
+  res.send(accountPage(req.user, "", "Parol yangilandi ✅"));
+});
+
+function accountPage(u, error = "", ok = "") {
+  return page(
+    "Akkaunt",
+    `${ok ? `<div class="ok">${esc(ok)}</div>` : ""}
+    <div class="card">
+      <h1>Akkaunt</h1>
+      <p class="hint">Email: <b>${esc(u.email)}</b></p>
+      <p class="hint">Biznes: ${esc(u.businessName || "-")}</p>
+      <p><a href="/dashboard">← Boshqaruvga qaytish</a></p>
+    </div>
+    <div class="card">
+      <h2>🔒 Parolni o'zgartirish</h2>
+      ${error ? `<div class="error">${esc(error)}</div>` : ""}
+      <form method="post" action="/account/password">
+        <label>Joriy parol</label>
+        <input name="oldPassword" type="password" required>
+        <label>Yangi parol (kamida 6 belgi)</label>
+        <input name="newPassword" type="password" required minlength="6">
+        <button>O'zgartirish</button>
+      </form>
+    </div>`,
+    { user: u }
+  );
+}
 
 // ==== Admin panel (dasturchi) — barcha bizneslarni sozlash ====
 

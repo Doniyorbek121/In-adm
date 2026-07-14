@@ -7,9 +7,10 @@ import path from "node:path";
 const dataDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "data");
 rmSync(dataDir, { recursive: true, force: true });
 
-const { register } = await import("../src/auth.js");
+const { register, changePassword, login } = await import("../src/auth.js");
 const sub = await import("../src/subscription.js");
 const eng = await import("../src/engagement.js");
+const { isDuplicate } = await import("../src/dedup.js");
 
 function newUser(email) {
   return register(email, "parol123", "Test").user;
@@ -75,4 +76,24 @@ test("handoff chatni qo'lda rejimga o'tkazadi va hal qilinadi", () => {
   eng.resolveHandoff(u, id);
   assert.strictEqual(eng.isManual(u, "999"), false);
   assert.strictEqual(eng.pendingHandoffs(u).length, 0);
+});
+
+// ==== Xabar dedup ====
+
+test("takroriy webhook xabari aniqlanadi", () => {
+  assert.strictEqual(isDuplicate("msg-1"), false); // birinchi marta
+  assert.strictEqual(isDuplicate("msg-1"), true); // takror
+  assert.strictEqual(isDuplicate("msg-2"), false);
+  assert.strictEqual(isDuplicate(""), false); // ID yo'q — dedup qilinmaydi
+});
+
+// ==== Parol o'zgartirish ====
+
+test("to'g'ri joriy parol bilan parol o'zgaradi", () => {
+  const u = newUser("pw@x.uz");
+  const bad = changePassword(u, "notogri", "yangiparol");
+  assert.ok(bad.error);
+  const ok = changePassword(u, "parol123", "yangiparol");
+  assert.ok(ok.ok);
+  assert.ok(login("pw@x.uz", "yangiparol").token);
 });

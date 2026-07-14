@@ -1,4 +1,5 @@
 import { processMessage } from "../respond.js";
+import { isDuplicate } from "../dedup.js";
 import { fetchWhatsAppMedia } from "../media.js";
 import { synthesize, ttsAvailable } from "../tts.js";
 import {
@@ -16,9 +17,9 @@ export async function handleWhatsAppEntry(tenant, entry) {
     for (const message of change.value?.messages || []) {
       const from = message.from;
       if (!from) continue;
+      if (isDuplicate(message.id)) continue; // takroriy webhook
 
       let text = "";
-      let incomingVoice = false;
       const media = [];
 
       if (message.type === "text") {
@@ -26,7 +27,6 @@ export async function handleWhatsAppEntry(tenant, entry) {
       } else if (["image", "audio", "video", "voice", "document"].includes(message.type)) {
         const mediaObj = message[message.type];
         text = mediaObj?.caption || "";
-        incomingVoice = message.type === "voice" || message.type === "audio";
         if (mediaObj?.id) {
           try {
             media.push(
@@ -50,10 +50,9 @@ export async function handleWhatsAppEntry(tenant, entry) {
       const { reply } = await processMessage(tenant, "whatsapp", from, { text, media });
       if (!reply) continue;
 
-      // Ovozli javob: Pro rejim yoqilgan va TTS sozlangan bo'lsa,
-      // ayniqsa mijoz ovoz yuborgan bo'lsa — ovoz bilan ham javob beramiz.
-      const wantVoice =
-        tenant.settings?.voiceReplies && ttsAvailable && (incomingVoice || true);
+      // Ovozli javob: tadbirkor yoqib qo'ygan va platformada TTS sozlangan bo'lsa,
+      // matn bilan birga ovozli javob ham yuboramiz.
+      const wantVoice = Boolean(tenant.settings?.voiceReplies) && ttsAvailable;
       if (wantVoice) {
         try {
           const audio = await synthesize(reply);

@@ -13,6 +13,15 @@ export function sendMessengerMessage(tenant, psid, text) {
   );
 }
 
+/** "Yozmoqda…" ko'rsatkichi (tirik operator taassuroti). */
+export function showTyping(tenant, psid) {
+  return graphPost(
+    "me/messages",
+    { recipient: { id: psid }, sender_action: "typing_on" },
+    tenant.meta.pageAccessToken
+  );
+}
+
 /** Facebook post kommentiga javob yozadi. */
 export function replyToFacebookComment(tenant, commentId, message) {
   return graphPost(

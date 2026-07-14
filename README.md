@@ -44,11 +44,15 @@ Tabiiy javob mijozga qaytariladi
 
 Talablar: Node.js 18+ (media tahlili uchun 18.17+ tavsiya).
 
+> 📋 Qadam-baqadam ishga tushirish: **[SETUP.md](SETUP.md)** — faqat kalitlarni ulaysiz.
+
 ```bash
 npm install
 cp .env.example .env
 npm start
 ```
+
+Server startda yetishmayotgan sozlamalarni ogohlantiradi. `GET /health` orqali tirikligini tekshirish mumkin.
 
 `.env` da to'ldiring:
 - `VERIFY_TOKEN`, `APP_SECRET` — Meta webhook uchun

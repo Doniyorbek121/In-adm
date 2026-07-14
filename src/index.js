@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import { config } from "./config.js";
 import { attachUser } from "./auth.js";
 import { web } from "./web/routes.js";
+import { page } from "./web/layout.js";
 import { findUserByPlatformId } from "./db.js";
 import { handleInstagramEntry } from "./handlers/instagram.js";
 import { handleFacebookEntry } from "./handlers/facebook.js";
@@ -44,6 +45,11 @@ function isValidSignature(req) {
     return false;
   }
 }
+
+// Server tirikligini tekshirish (monitoring/uptime uchun)
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok", time: new Date().toISOString() });
+});
 
 // Webhook tekshiruvi (Meta Developer panelda "Verify" bosilganda keladi)
 app.get("/webhook", (req, res) => {
@@ -104,7 +110,39 @@ app.post("/webhook", (req, res) => {
   }
 });
 
+// Topilmagan sahifalar
+app.use((req, res) => {
+  if (req.accepts("html")) {
+    return res
+      .status(404)
+      .send(
+        page(
+          "Topilmadi",
+          `<div class="card center">
+            <h1>404</h1>
+            <p>Bunday sahifa topilmadi.</p>
+            <p><a href="/">← Bosh sahifa</a></p>
+          </div>`,
+          { user: req.user }
+        )
+      );
+  }
+  res.sendStatus(404);
+});
+
+// Ishga tushishdan oldin muhim sozlamalarni tekshiramiz
+function checkConfig() {
+  const warn = [];
+  if (!config.verifyToken) warn.push("VERIFY_TOKEN o'rnatilmagan — webhook tasdiqlanmaydi");
+  if (!config.appSecret) warn.push("APP_SECRET yo'q — webhook imzosi tekshirilmaydi (xavfsizlik uchun tavsiya etiladi)");
+  if (!config.adminEmails.length) warn.push("ADMIN_EMAILS yo'q — hech kim admin panelga kira olmaydi");
+  if (!process.env.GEMINI_API_KEY && !process.env.ANTHROPIC_API_KEY)
+    warn.push("AI kaliti (GEMINI_API_KEY) yo'q — bot kalit so'z rejimida ishlaydi");
+  for (const w of warn) console.warn("⚠️  " + w);
+}
+
 app.listen(config.port, () => {
+  checkConfig();
   console.log(`Server ${config.port}-portda ishga tushdi 🚀`);
   console.log(`Admin panel:    http://localhost:${config.port}/`);
   console.log(`Webhook manzil: http://localhost:${config.port}/webhook`);

@@ -6,6 +6,7 @@ import {
   createSession,
   getSessionUser,
   deleteSession,
+  updateUser,
 } from "./db.js";
 
 function hashPassword(password, salt) {
@@ -46,6 +47,22 @@ export function login(email, password) {
 
 export function logout(token) {
   deleteSession(token);
+}
+
+/** Parolni o'zgartiradi (avval eski parolni tekshiradi) */
+export function changePassword(user, oldPassword, newPassword) {
+  const hash = hashPassword(oldPassword || "", user.salt);
+  const ok = crypto.timingSafeEqual(
+    Buffer.from(hash),
+    Buffer.from(user.passwordHash)
+  );
+  if (!ok) return { error: "Joriy parol noto'g'ri" };
+  if (!newPassword || newPassword.length < 6) {
+    return { error: "Yangi parol kamida 6 ta belgidan iborat bo'lsin" };
+  }
+  const salt = crypto.randomBytes(16).toString("hex");
+  updateUser(user.id, { salt, passwordHash: hashPassword(newPassword, salt) });
+  return { ok: true };
 }
 
 /** Cookie sarlavhasidan sid qiymatini ajratib oladi */

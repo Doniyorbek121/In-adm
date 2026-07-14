@@ -31,3 +31,12 @@ export function sendDirectMessage(tenant, igsid, text) {
     tenant.meta.pageAccessToken
   );
 }
+
+/** "Yozmoqda…" ko'rsatkichi va o'qildi belgisi (tirik operator taassuroti). */
+export function showTyping(tenant, igsid) {
+  return graphPost(
+    "me/messages",
+    { recipient: { id: igsid }, sender_action: "typing_on" },
+    tenant.meta.pageAccessToken
+  );
+}
