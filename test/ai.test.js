@@ -6,19 +6,32 @@ import assert from "node:assert";
 delete process.env.ANTHROPIC_API_KEY;
 delete process.env.GEMINI_API_KEY;
 
-const { aiEnabled, aiProvider, generateReply } = await import("../src/ai.js");
+const { generateReply } = await import("../src/ai.js");
 
-test("API kalit bo'lmasa AI o'chiq bo'ladi", () => {
-  assert.strictEqual(aiEnabled, false);
-  assert.strictEqual(aiProvider, "none");
-});
+const tenantWithoutAI = {
+  id: "t1",
+  businessName: "Test Do'kon",
+  businessInfo: "Test biznes ma'lumotlari",
+  geminiApiKey: "",
+  meta: {},
+};
 
-test("AI o'chiq bo'lsa kalit so'z qoidasi ishlaydi", async () => {
-  const reply = await generateReply("user-1", "narxi qancha?");
+test("AI kaliti bo'lmasa kalit so'z qoidasi ishlaydi", async () => {
+  const reply = await generateReply(tenantWithoutAI, "user-1", {
+    text: "narxi qancha?",
+  });
   assert.match(reply, /Narxlar/);
 });
 
-test("AI o'chiq bo'lsa ham default javob qaytadi", async () => {
-  const reply = await generateReply("user-2", "qwertyuiop");
+test("mos qoida bo'lmasa default javob qaytadi", async () => {
+  const reply = await generateReply(tenantWithoutAI, "user-2", {
+    text: "qwertyuiop",
+  });
+  assert.ok(reply.length > 0);
+});
+
+test("biznes ma'lumoti bo'lmasa ham javob qaytadi", async () => {
+  const emptyTenant = { ...tenantWithoutAI, businessInfo: "" };
+  const reply = await generateReply(emptyTenant, "user-3", { text: "salom" });
   assert.ok(reply.length > 0);
 });

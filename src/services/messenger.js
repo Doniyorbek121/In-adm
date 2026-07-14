@@ -1,8 +1,7 @@
-import { config } from "../config.js";
 import { graphPost } from "../graph.js";
 
 /** Facebook Messenger orqali xabar yuboradi. */
-export function sendMessengerMessage(psid, text) {
+export function sendMessengerMessage(tenant, psid, text) {
   return graphPost(
     "me/messages",
     {
@@ -10,11 +9,15 @@ export function sendMessengerMessage(psid, text) {
       messaging_type: "RESPONSE",
       message: { text },
     },
-    config.pageAccessToken
+    tenant.meta.pageAccessToken
   );
 }
 
 /** Facebook post kommentiga javob yozadi. */
-export function replyToFacebookComment(commentId, message) {
-  return graphPost(`${commentId}/comments`, { message }, config.pageAccessToken);
+export function replyToFacebookComment(tenant, commentId, message) {
+  return graphPost(
+    `${commentId}/comments`,
+    { message },
+    tenant.meta.pageAccessToken
+  );
 }

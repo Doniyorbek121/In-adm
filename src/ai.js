@@ -1,64 +1,52 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { existsSync, readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import path from "node:path";
 import { findReply } from "./autoReply.js";
 
-const businessPath = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "business.md"
-);
-
-const businessInfo = existsSync(businessPath)
-  ? readFileSync(businessPath, "utf8")
-  : "";
-
-// Provayder tanlash: GEMINI_API_KEY bo'lsa Gemini,
-// ANTHROPIC_API_KEY bo'lsa Claude, ikkalasi ham yo'q bo'lsa kalit so'z rejimi
-const geminiKey = process.env.GEMINI_API_KEY || "";
-const anthropicKey = process.env.ANTHROPIC_API_KEY || "";
-
-export const aiProvider = !businessInfo
-  ? "none"
-  : geminiKey
-    ? "gemini"
-    : anthropicKey
-      ? "claude"
-      : "none";
-
-export const aiEnabled = aiProvider !== "none";
+// Global (zaxira) kalitlar — foydalanuvchi o'z kalitini kiritmagan bo'lsa ishlatiladi
+const globalGeminiKey = process.env.GEMINI_API_KEY || "";
+const globalAnthropicKey = process.env.ANTHROPIC_API_KEY || "";
 
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const CLAUDE_MODEL = process.env.AI_MODEL || "claude-opus-4-8";
 
-const anthropicClient = aiProvider === "claude" ? new Anthropic() : null;
+const anthropicClient = globalAnthropicKey ? new Anthropic() : null;
 
-// Har bir mijoz bilan suhbat tarixi (xotirada, oxirgi 10 ta xabar)
+// Suhbat tarixi: "tenantId:mijozId" -> [{role, text}]
 const conversations = new Map();
 const MAX_HISTORY = 10;
 
-const systemPrompt = `Sen kichik biznesning mijozlar bilan ishlash bo'yicha yordamchisisan. Instagram, Facebook va WhatsApp orqali yozgan mijozlarga javob berasan.
+function buildSystemPrompt(tenant) {
+  return `Sen "${tenant.businessName || "biznes"}" nomli biznesning mijozlar bilan ishlash bo'yicha yordamchisisan. Instagram, Facebook va WhatsApp orqali yozgan mijozlarga javob berasan.
 
 Qoidalar:
 - Faqat quyidagi "Biznes ma'lumotlari" bo'limidagi faktlarga tayanib javob ber. Ma'lumot bo'lmasa, o'ylab topma — "bu haqda operatorimiz aniqlik kiritadi" deb ayt.
 - Mijoz qaysi tilda yozsa, o'sha tilda javob ber (o'zbek, rus yoki ingliz).
-- Qisqa va samimiy yoz — bu messenjer suhbati, 2-3 jumladan oshirma.
+- Xuddi tirik operator kabi tabiiy, samimiy va iliq yoz. O'zingni robot deb tanishtirma.
+- Qisqa yoz — bu messenjer suhbati, 2-3 jumladan oshirma.
+- Mijoz ovozli xabar yuborsa — eshitib, mazmuniga javob ber. Rasm yoki video yuborsa — ko'rib, nimaligini aniqlab, biznesga bog'lab javob ber (masalan, mahsulot rasmi bo'lsa narxi va borligini ayt).
 - Narx, manzil, yetkazib berish kabi savollarga aniq raqamlar bilan javob ber.
 - Buyurtma bermoqchi bo'lgan mijozdan kerakli ma'lumotlarni so'ra (qaysi mahsulot, nechta, manzil).
 
 # Biznes ma'lumotlari
 
-${businessInfo}`;
+${tenant.businessInfo}`;
+}
 
-/** Gemini API orqali javob oladi. history: [{role, text}] */
-async function askGemini(history, text) {
+/** Gemini — matn + ovoz + rasm + video birga tahlil qilinadi */
+async function askGemini(apiKey, systemPrompt, history, text, media) {
+  const parts = [
+    ...media.map((m) => ({
+      inline_data: { mime_type: m.mimeType, data: m.data },
+    })),
+  ];
+  if (text) parts.push({ text });
+  if (parts.length === 0) return "";
+
   const contents = [
     ...history.map((m) => ({
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.text }],
     })),
-    { role: "user", parts: [{ text }] },
+    { role: "user", parts },
   ];
 
   const res = await fetch(
@@ -67,7 +55,7 @@ async function askGemini(history, text) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-goog-api-key": geminiKey,
+        "x-goog-api-key": apiKey,
       },
       body: JSON.stringify({
         system_instruction: { parts: [{ text: systemPrompt }] },
@@ -84,29 +72,45 @@ async function askGemini(history, text) {
     );
   }
 
-  const parts = data.candidates?.[0]?.content?.parts || [];
-  return parts
+  return (data.candidates?.[0]?.content?.parts || [])
     .map((p) => p.text || "")
     .join("")
     .trim();
 }
 
-/** Claude API orqali javob oladi. history: [{role, text}] */
-async function askClaude(history, text) {
+/** Claude — matn va rasm (ovoz/video Claude'da qo'llanmaydi) */
+async function askClaude(systemPrompt, history, text, media) {
+  const content = [];
+  let unsupported = 0;
+  for (const m of media) {
+    if (m.mimeType.startsWith("image/")) {
+      content.push({
+        type: "image",
+        source: { type: "base64", media_type: m.mimeType, data: m.data },
+      });
+    } else {
+      unsupported++;
+    }
+  }
+  let userText = text || "";
+  if (unsupported > 0) {
+    userText =
+      `[Mijoz ${unsupported} ta ovozli/video xabar yubordi — mazmunini ko'ra olmading. ` +
+      `Undan xabarini matnda yozishini muloyim so'ra.] ${userText}`;
+  }
+  if (userText) content.push({ type: "text", text: userText });
+  if (content.length === 0) return "";
+
   const messages = [
     ...history.map((m) => ({ role: m.role, content: m.text })),
-    { role: "user", content: text },
+    { role: "user", content },
   ];
 
   const response = await anthropicClient.messages.create({
     model: CLAUDE_MODEL,
     max_tokens: 1024,
     system: [
-      {
-        type: "text",
-        text: systemPrompt,
-        cache_control: { type: "ephemeral" },
-      },
+      { type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } },
     ],
     messages,
   });
@@ -119,30 +123,47 @@ async function askClaude(history, text) {
 }
 
 /**
- * Mijoz xabariga AI javob qaytaradi.
- * AI ishlamasa (kalit yo'q, xato, limit) — kalit so'z qoidalariga qaytadi,
- * shunda bot hech qachon javobsiz qolmaydi.
+ * Mijoz xabariga AI javob qaytaradi (multi-tenant, multimodal).
+ *
+ * tenant   — db'dagi foydalanuvchi (biznes egasi)
+ * chatKey  — mijozning platformadagi ID'si
+ * text     — mijoz yozgan matn (bo'lishi shart emas)
+ * media    — [{mimeType, data(base64)}] — rasm/ovoz/video (bo'lishi shart emas)
+ *
+ * AI ishlamasa kalit so'z qoidalariga qaytadi — bot javobsiz qolmaydi.
  */
-export async function generateReply(userId, text) {
-  if (!aiEnabled) return findReply(text);
+export async function generateReply(tenant, chatKey, { text = "", media = [] } = {}) {
+  const geminiKey = tenant.geminiApiKey || globalGeminiKey;
+  const provider =
+    tenant.businessInfo && geminiKey
+      ? "gemini"
+      : tenant.businessInfo && anthropicClient
+        ? "claude"
+        : "none";
 
-  const history = conversations.get(userId) || [];
+  if (provider === "none") {
+    return findReply(text) ;
+  }
+
+  const key = `${tenant.id}:${chatKey}`;
+  const history = conversations.get(key) || [];
+  const systemPrompt = buildSystemPrompt(tenant);
 
   try {
     const reply =
-      aiProvider === "gemini"
-        ? await askGemini(history, text)
-        : await askClaude(history, text);
+      provider === "gemini"
+        ? await askGemini(geminiKey, systemPrompt, history, text, media)
+        : await askClaude(systemPrompt, history, text, media);
 
     if (!reply) return findReply(text);
 
-    // Suhbat tarixini yangilaymiz (oxirgi MAX_HISTORY ta xabar)
+    const summary = text || "[media xabar]";
     const updated = [
       ...history,
-      { role: "user", text },
+      { role: "user", text: summary },
       { role: "assistant", text: reply },
     ].slice(-MAX_HISTORY);
-    conversations.set(userId, updated);
+    conversations.set(key, updated);
 
     return reply;
   } catch (error) {

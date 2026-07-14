@@ -1,25 +1,31 @@
 import { commentReplyText } from "../autoReply.js";
 import { generateReply } from "../ai.js";
+import { loadAttachments } from "./instagram.js";
 import {
   sendMessengerMessage,
   replyToFacebookComment,
 } from "../services/messenger.js";
 
 /** Facebook sahifa webhook (object: "page") hodisalarini qayta ishlaydi. */
-export async function handleFacebookEntry(entry) {
+export async function handleFacebookEntry(tenant, entry) {
   const pageId = entry.id;
 
-  // Messenger xabarlari
+  // Messenger xabarlari — matn, ovoz, rasm, video
   for (const event of entry.messaging || []) {
     const senderId = event.sender?.id;
-    const text = event.message?.text;
-
-    if (!senderId || !text || event.message?.is_echo) continue;
+    const message = event.message;
+    if (!senderId || !message || message.is_echo) continue;
     if (senderId === pageId) continue;
 
-    const reply = await generateReply(senderId, text);
-    console.log(`[Messenger] ${senderId}: "${text}" -> javob yuborilmoqda`);
-    await sendMessengerMessage(senderId, reply);
+    const text = message.text || "";
+    const media = await loadAttachments(message.attachments);
+    if (!text && media.length === 0) continue;
+
+    console.log(
+      `[Messenger] ${tenant.businessName}: ${senderId} -> "${text}" (${media.length} media)`
+    );
+    const reply = await generateReply(tenant, senderId, { text, media });
+    await sendMessengerMessage(tenant, senderId, reply);
   }
 
   // Sahifa postlaridagi kommentlar (feed)
@@ -27,13 +33,11 @@ export async function handleFacebookEntry(entry) {
     if (change.field !== "feed") continue;
     const value = change.value;
     if (value?.item !== "comment" || value?.verb !== "add") continue;
-
-    // Sahifaning o'z kommentlariga javob bermaymiz
     if (value.from?.id === pageId) continue;
 
     console.log(
-      `[FB Komment] ${value.from?.name || "?"}: "${value.message}" -> javob yuborilmoqda`
+      `[FB Komment] ${tenant.businessName}: ${value.from?.name || "?"}: "${value.message}"`
     );
-    await replyToFacebookComment(value.comment_id, commentReplyText());
+    await replyToFacebookComment(tenant, value.comment_id, commentReplyText());
   }
 }

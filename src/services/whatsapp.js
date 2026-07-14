@@ -1,29 +1,28 @@
-import { config } from "../config.js";
 import { graphPost } from "../graph.js";
 
 /** WhatsApp Cloud API orqali matnli xabar yuboradi. */
-export function sendWhatsAppMessage(to, text) {
+export function sendWhatsAppMessage(tenant, to, text) {
   return graphPost(
-    `${config.whatsappPhoneNumberId}/messages`,
+    `${tenant.meta.whatsappPhoneNumberId}/messages`,
     {
       messaging_product: "whatsapp",
       to,
       type: "text",
       text: { body: text },
     },
-    config.whatsappToken
+    tenant.meta.whatsappToken
   );
 }
 
 /** Kiruvchi WhatsApp xabarini "o'qildi" deb belgilaydi. */
-export function markWhatsAppRead(messageId) {
+export function markWhatsAppRead(tenant, messageId) {
   return graphPost(
-    `${config.whatsappPhoneNumberId}/messages`,
+    `${tenant.meta.whatsappPhoneNumberId}/messages`,
     {
       messaging_product: "whatsapp",
       status: "read",
       message_id: messageId,
     },
-    config.whatsappToken
+    tenant.meta.whatsappToken
   );
 }

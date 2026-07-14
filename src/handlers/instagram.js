@@ -1,26 +1,46 @@
-import { config } from "../config.js";
 import { commentReplyText, commentPrivateReplyText } from "../autoReply.js";
 import { generateReply } from "../ai.js";
+import { fetchAsBase64 } from "../media.js";
 import {
   replyToComment,
   privateReplyToComment,
   sendDirectMessage,
 } from "../services/instagram.js";
 
+/** IG/Messenger xabaridagi biriktirmalarni (rasm/ovoz/video) yuklab oladi */
+export async function loadAttachments(attachments = []) {
+  const media = [];
+  for (const att of attachments) {
+    if (!["image", "video", "audio"].includes(att.type)) continue;
+    const url = att.payload?.url;
+    if (!url) continue;
+    try {
+      media.push(await fetchAsBase64(url));
+    } catch (err) {
+      console.error("Biriktirmani yuklab bo'lmadi:", err.message);
+    }
+  }
+  return media;
+}
+
 /** Instagram webhook (object: "instagram") hodisalarini qayta ishlaydi. */
-export async function handleInstagramEntry(entry) {
-  // Direct (DM) xabarlar
+export async function handleInstagramEntry(tenant, entry) {
+  // Direct (DM) xabarlar — matn, ovoz, rasm, video
   for (const event of entry.messaging || []) {
     const senderId = event.sender?.id;
-    const text = event.message?.text;
+    const message = event.message;
+    if (!senderId || !message || message.is_echo) continue;
+    if (senderId === tenant.meta.igUserId) continue;
 
-    // O'zimiz yuborgan xabarlar (echo) va bo'sh xabarlarni tashlab yuboramiz
-    if (!senderId || !text || event.message?.is_echo) continue;
-    if (senderId === config.igUserId) continue;
+    const text = message.text || "";
+    const media = await loadAttachments(message.attachments);
+    if (!text && media.length === 0) continue;
 
-    const reply = await generateReply(senderId, text);
-    console.log(`[IG Direct] ${senderId}: "${text}" -> javob yuborilmoqda`);
-    await sendDirectMessage(senderId, reply);
+    console.log(
+      `[IG Direct] ${tenant.businessName}: ${senderId} -> "${text}" (${media.length} media)`
+    );
+    const reply = await generateReply(tenant, senderId, { text, media });
+    await sendDirectMessage(tenant, senderId, reply);
   }
 
   // Kommentlar
@@ -28,14 +48,19 @@ export async function handleInstagramEntry(entry) {
     if (change.field !== "comments") continue;
     const comment = change.value;
     if (!comment?.id) continue;
-
-    // O'zimizning kommentimizga javob bermaymiz (cheksiz sikl oldini olish)
-    if (comment.from?.id === config.igUserId) continue;
+    if (comment.from?.id === tenant.meta.igUserId) continue;
 
     console.log(
-      `[IG Komment] @${comment.from?.username || "?"}: "${comment.text}" -> javob yuborilmoqda`
+      `[IG Komment] ${tenant.businessName}: @${comment.from?.username || "?"}: "${comment.text}"`
     );
-    await replyToComment(comment.id, commentReplyText());
-    await privateReplyToComment(comment.id, commentPrivateReplyText());
+    await replyToComment(tenant, comment.id, commentReplyText());
+
+    // Direct'ga AI bilan shaxsiy javob — komment mazmuniga mos
+    const privateText = comment.text
+      ? await generateReply(tenant, `comment:${comment.from?.id || comment.id}`, {
+          text: comment.text,
+        })
+      : commentPrivateReplyText();
+    await privateReplyToComment(tenant, comment.id, privateText);
   }
 }
