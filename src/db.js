@@ -10,6 +10,8 @@ const dataDir = path.join(
 );
 const dbPath = path.join(dataDir, "db.json");
 
+const TRIAL_DAYS = 14;
+
 let db = { users: [], sessions: {} };
 
 if (existsSync(dbPath)) {
@@ -17,9 +19,32 @@ if (existsSync(dbPath)) {
     db = JSON.parse(readFileSync(dbPath, "utf8"));
     db.users ||= [];
     db.sessions ||= {};
+    db.users.forEach(normalizeUser);
   } catch {
     console.error("db.json o'qib bo'lmadi — yangi baza yaratiladi");
   }
+}
+
+/** Eski yozuvlarga yangi maydonlar qo'shilishini ta'minlaydi */
+function normalizeUser(u) {
+  u.meta ||= {};
+  u.subscription ||= {
+    plan: "start",
+    status: "trial",
+    trialEndsAt: new Date(Date.now() + TRIAL_DAYS * 86400000).toISOString(),
+    expiresAt: null,
+  };
+  u.settings ||= { voiceReplies: false };
+  u.stats ||= {
+    messages: 0,
+    customers: {},
+    channels: { instagram: 0, facebook: 0, whatsapp: 0 },
+    days: {},
+    orders: 0,
+  };
+  u.handoffs ||= [];
+  u.manualChats ||= {};
+  return u;
 }
 
 function save() {
@@ -27,10 +52,15 @@ function save() {
   writeFileSync(dbPath, JSON.stringify(db, null, 2));
 }
 
+/** Boshqa modullar user obyektini o'zgartirgach saqlash uchun */
+export function persist() {
+  save();
+}
+
 // ==== Foydalanuvchilar ====
 
 export function createUser({ email, passwordHash, salt, businessName }) {
-  const user = {
+  const user = normalizeUser({
     id: crypto.randomUUID(),
     email: email.toLowerCase().trim(),
     passwordHash,
@@ -46,7 +76,7 @@ export function createUser({ email, passwordHash, salt, businessName }) {
       whatsappPhoneNumberId: "",
     },
     createdAt: new Date().toISOString(),
-  };
+  });
   db.users.push(user);
   save();
   return user;

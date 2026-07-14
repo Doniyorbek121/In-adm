@@ -1,5 +1,6 @@
 import { commentReplyText, commentPrivateReplyText } from "../autoReply.js";
 import { generateReply } from "../ai.js";
+import { processMessage } from "../respond.js";
 import { fetchAsBase64 } from "../media.js";
 import {
   replyToComment,
@@ -39,8 +40,8 @@ export async function handleInstagramEntry(tenant, entry) {
     console.log(
       `[IG Direct] ${tenant.businessName}: ${senderId} -> "${text}" (${media.length} media)`
     );
-    const reply = await generateReply(tenant, senderId, { text, media });
-    await sendDirectMessage(tenant, senderId, reply);
+    const { reply } = await processMessage(tenant, "instagram", senderId, { text, media });
+    if (reply) await sendDirectMessage(tenant, senderId, reply);
   }
 
   // Kommentlar

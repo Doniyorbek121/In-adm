@@ -1,5 +1,5 @@
 import { commentReplyText } from "../autoReply.js";
-import { generateReply } from "../ai.js";
+import { processMessage } from "../respond.js";
 import { loadAttachments } from "./instagram.js";
 import {
   sendMessengerMessage,
@@ -24,8 +24,8 @@ export async function handleFacebookEntry(tenant, entry) {
     console.log(
       `[Messenger] ${tenant.businessName}: ${senderId} -> "${text}" (${media.length} media)`
     );
-    const reply = await generateReply(tenant, senderId, { text, media });
-    await sendMessengerMessage(tenant, senderId, reply);
+    const { reply } = await processMessage(tenant, "facebook", senderId, { text, media });
+    if (reply) await sendMessengerMessage(tenant, senderId, reply);
   }
 
   // Sahifa postlaridagi kommentlar (feed)
