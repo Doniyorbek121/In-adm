@@ -1,5 +1,6 @@
 import { config } from "../config.js";
-import { findReply, commentReplyText, commentPrivateReplyText } from "../autoReply.js";
+import { commentReplyText, commentPrivateReplyText } from "../autoReply.js";
+import { generateReply } from "../ai.js";
 import {
   replyToComment,
   privateReplyToComment,
@@ -17,7 +18,7 @@ export async function handleInstagramEntry(entry) {
     if (!senderId || !text || event.message?.is_echo) continue;
     if (senderId === config.igUserId) continue;
 
-    const reply = findReply(text);
+    const reply = await generateReply(senderId, text);
     console.log(`[IG Direct] ${senderId}: "${text}" -> javob yuborilmoqda`);
     await sendDirectMessage(senderId, reply);
   }

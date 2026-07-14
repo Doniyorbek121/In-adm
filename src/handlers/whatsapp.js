@@ -1,4 +1,4 @@
-import { findReply } from "../autoReply.js";
+import { generateReply } from "../ai.js";
 import {
   sendWhatsAppMessage,
   markWhatsAppRead,
@@ -16,7 +16,7 @@ export async function handleWhatsAppEntry(entry) {
       const text = message.text?.body;
       if (!from || !text) continue;
 
-      const reply = findReply(text);
+      const reply = await generateReply(from, text);
       console.log(`[WhatsApp] ${from}: "${text}" -> javob yuborilmoqda`);
       await markWhatsAppRead(message.id);
       await sendWhatsAppMessage(from, reply);

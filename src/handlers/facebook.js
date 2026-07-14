@@ -1,4 +1,5 @@
-import { findReply, commentReplyText } from "../autoReply.js";
+import { commentReplyText } from "../autoReply.js";
+import { generateReply } from "../ai.js";
 import {
   sendMessengerMessage,
   replyToFacebookComment,
@@ -16,7 +17,7 @@ export async function handleFacebookEntry(entry) {
     if (!senderId || !text || event.message?.is_echo) continue;
     if (senderId === pageId) continue;
 
-    const reply = findReply(text);
+    const reply = await generateReply(senderId, text);
     console.log(`[Messenger] ${senderId}: "${text}" -> javob yuborilmoqda`);
     await sendMessengerMessage(senderId, reply);
   }
