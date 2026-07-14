@@ -61,6 +61,11 @@ export function findUserById(id) {
   return db.users.find((u) => u.id === id) || null;
 }
 
+/** Barcha foydalanuvchilar ro'yxati (admin uchun) */
+export function listUsers() {
+  return db.users.slice();
+}
+
 export function updateUser(id, patch) {
   const user = findUserById(id);
   if (!user) return null;

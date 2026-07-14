@@ -14,7 +14,8 @@ Instagram, Facebook va WhatsApp uchun **veb-platforma ko'rinishidagi AI avtomatl
 | 🎤 **Ovozli xabarlar** | AI ovozni eshitib, mazmuniga javob beradi (Gemini) |
 | 📸 **Rasm va video** | AI ko'rib tahlil qiladi — mahsulot rasmi bo'lsa narxini aytadi |
 | 🗣️ **Suhbat tarixi** | Har mijoz bilan kontekst saqlanadi — tabiiy muloqot |
-| 👥 **Multi-tenant** | Bitta serverda istalgancha biznes — har birining o'z tokenlari va AI bilimi |
+| 👥 **Multi-tenant** | Bitta serverda istalgancha biznes — har birining o'z kanallari va AI bilimi |
+| ⚙️ **Admin panel** | Dasturchi barcha bizneslarni ko'radi va ularga Meta tokenlarni kiritadi |
 | 🛡️ **Zaxira rejim** | AI ishlamasa kalit so'z qoidalari (`rules.json`) ishlaydi — mijoz javobsiz qolmaydi |
 
 ## Qanday ishlaydi
@@ -30,29 +31,47 @@ AI (Gemini) ◄── shu biznesning ma'lumotlari + suhbat tarixi
 Tabiiy javob mijozga qaytariladi
 ```
 
-## O'rnatish (server egasi uchun)
+## Rollar
+
+- **Dasturchi / admin (siz)** — platformani o'rnatadi, AI kalitini bir marta `.env` ga qo'yadi va har bir biznesning Meta tokenlarini admin-panelda kiritadi. Tadbirkorlar texnik narsalarga tegmaydi.
+- **Tadbirkor (mijoz)** — faqat ro'yxatdan o'tadi va o'z biznesini AI'ga o'rgatadi. Token yoki kalit kiritmaydi.
+
+## O'rnatish (dasturchi)
 
 Talablar: Node.js 18+ (media tahlili uchun 18.17+ tavsiya).
 
 ```bash
 npm install
-cp .env.example .env    # VERIFY_TOKEN va APP_SECRET kiriting
+cp .env.example .env
 npm start
 ```
 
-Brauzerda `http://localhost:3000` — tayyor. Production'da domen ulang (webhook uchun HTTPS shart; test uchun `ngrok http 3000`).
+`.env` da to'ldiring:
+- `VERIFY_TOKEN`, `APP_SECRET` — Meta webhook uchun
+- `GEMINI_API_KEY` — [aistudio.google.com/apikey](https://aistudio.google.com/apikey) dan olingan **platforma kaliti** (barcha bizneslar uchun bitta; bepul tarif bor)
+- `ADMIN_EMAILS` — admin bo'ladigan email(lar), vergul bilan
 
-`.env` da ixtiyoriy ravishda **umumiy** `GEMINI_API_KEY` berish mumkin — o'z kalitini kiritmagan foydalanuvchilar uchun ishlaydi.
+So'ng shu `ADMIN_EMAILS` dagi email bilan ro'yxatdan o'ting — avtomatik admin bo'lasiz.
 
-## Foydalanish (tadbirkor uchun)
+Brauzerda `http://localhost:3000`. Production'da domen ulang (webhook uchun HTTPS shart; test uchun `ngrok http 3000`).
+
+### Bizneslarni ulash (admin panel)
+
+`/admin` sahifasida barcha ro'yxatdan o'tgan bizneslar ko'rinadi. Har biriga:
+1. Biznesning Facebook sahifasi/Instagram Business akkaunt/WhatsApp ma'lumotini olasiz.
+2. "Sozlash" tugmasi orqali uning tokenlarini kiritasiz:
+   - Page Access Token, Page ID, Instagram Business ID
+   - WhatsApp Token, Phone Number ID
+3. Saqlash bilan o'sha biznes boti ishga tushadi.
+
+Kerak bo'lsa, alohida biznesga o'z Gemini kalitini ham berish mumkin (bo'sh qoldirsangiz platforma kaliti ishlaydi).
+
+## Foydalanish (tadbirkor)
 
 1. **Ro'yxatdan o'ting** — saytda email va parol bilan.
 2. **AI'ni o'rgating** — panelda biznesingiz haqida yozing: mahsulotlar, narxlar, manzil, ish vaqti, yetkazib berish, to'lovlar, savol-javoblar. Oddiy matn, kod kerak emas.
-3. **AI kalitini kiriting** — [aistudio.google.com/apikey](https://aistudio.google.com/apikey) dan bepul Gemini kaliti oling.
-4. **Platformalarni ulang** — Meta tokenlari va ID'larni panelga kiriting:
-   - Page Access Token, Page ID, Instagram Business ID (Instagram + Facebook uchun)
-   - WhatsApp Token, Phone Number ID (WhatsApp uchun)
-5. Bo'ldi — mijozlaringizga AI javob bera boshlaydi.
+3. **Ijtimoiy tarmoqlarni ulash** uchun bizga murojaat qiling — Instagram/WhatsApp'ingizni biz ulaymiz.
+4. Bo'ldi — mijozlaringizga AI javob bera boshlaydi.
 
 ## Meta App sozlash (bir marta, server egasi)
 
@@ -82,7 +101,7 @@ src/
   auth.js               — ro'yxat/kirish, scrypt parol hash, cookie sessiyalar
   web/
     layout.js           — HTML shablon
-    routes.js           — panel sahifalari (dashboard, sozlamalar)
+    routes.js           — sahifalar: tadbirkor dashboardi + admin panel
   ai.js                 — multimodal AI (Gemini: matn+ovoz+rasm+video; Claude: matn+rasm)
   media.js              — IG/WhatsApp mediani yuklab olish (base64)
   autoReply.js          — kalit so'z qoidalari (zaxira rejim)

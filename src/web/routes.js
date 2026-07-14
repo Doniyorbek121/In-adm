@@ -1,12 +1,25 @@
 import { Router } from "express";
-import { register, login, logout, parseSid, requireAuth } from "../auth.js";
-import { updateUser } from "../db.js";
+import {
+  register,
+  login,
+  logout,
+  parseSid,
+  requireAuth,
+  requireAdmin,
+  isAdmin,
+} from "../auth.js";
+import { updateUser, listUsers, findUserById } from "../db.js";
 import { config } from "../config.js";
 import { page, esc } from "./layout.js";
 
 export const web = Router();
 
 const cookieOpts = "HttpOnly; Path=/; SameSite=Lax; Max-Age=2592000";
+
+// Platformada AI kaliti sozlanganmi? (dasturchi .env orqali kiritadi)
+const platformAiReady = Boolean(
+  process.env.GEMINI_API_KEY || process.env.ANTHROPIC_API_KEY
+);
 
 // ==== Bosh sahifa ====
 
@@ -25,6 +38,8 @@ web.get("/", (req, res) => {
           <li>🧠 Siz o'rgatgan biznes ma'lumotlari asosida ishlaydi</li>
           <li>💬 Instagram Direct, kommentlar, WhatsApp, Messenger — barchasi bitta joyda</li>
         </ul>
+        <p class="hint">Texnik sozlash (AI kaliti, ijtimoiy tarmoqlarni ulash) biz tomonimizdan bajariladi.
+        Siz faqat ro'yxatdan o'tib, biznesingizni AI'ga o'rgatasiz.</p>
         <p><a href="/register"><button>Bepul boshlash</button></a></p>
       </div>`,
       { user: req.user }
@@ -34,9 +49,7 @@ web.get("/", (req, res) => {
 
 // ==== Ro'yxatdan o'tish ====
 
-web.get("/register", (req, res) => {
-  res.send(registerPage());
-});
+web.get("/register", (_req, res) => res.send(registerPage()));
 
 web.post("/register", (req, res) => {
   const { email, password, businessName } = req.body || {};
@@ -69,9 +82,7 @@ function registerPage(error = "", values = {}) {
 
 // ==== Kirish / chiqish ====
 
-web.get("/login", (_req, res) => {
-  res.send(loginPage());
-});
+web.get("/login", (_req, res) => res.send(loginPage()));
 
 web.post("/login", (req, res) => {
   const { email, password } = req.body || {};
@@ -105,13 +116,16 @@ web.get("/logout", (req, res) => {
   res.redirect("/login");
 });
 
-// ==== Boshqaruv paneli ====
+// ==== Tadbirkor boshqaruv paneli — faqat AI o'qitish ====
+
+const badge = (on) =>
+  on ? `<span class="badge on">ulangan</span>` : `<span class="badge off">kutilmoqda</span>`;
 
 web.get("/dashboard", requireAuth, (req, res) => {
   const u = req.user;
+  const admin = isAdmin(u);
   const saved = req.query.saved;
-  const badge = (on) =>
-    on ? `<span class="badge on">ulangan</span>` : `<span class="badge off">ulanmagan</span>`;
+  const channelsReady = Boolean(u.meta.pageAccessToken || u.meta.whatsappToken);
 
   res.send(
     page(
@@ -122,10 +136,10 @@ web.get("/dashboard", requireAuth, (req, res) => {
         <h1>${esc(u.businessName || "Biznesim")}</h1>
         <p class="hint">
           AI o'qitish ${badge(Boolean(u.businessInfo))} &nbsp;
-          AI kalit ${badge(Boolean(u.geminiApiKey || process.env.GEMINI_API_KEY || process.env.ANTHROPIC_API_KEY))} &nbsp;
-          Instagram/Facebook ${badge(Boolean(u.meta.pageAccessToken))} &nbsp;
-          WhatsApp ${badge(Boolean(u.meta.whatsappToken))}
+          AI xizmati ${badge(platformAiReady || Boolean(u.geminiApiKey))} &nbsp;
+          Ijtimoiy tarmoqlar ${badge(channelsReady)}
         </p>
+        ${admin ? `<p><a href="/admin">⚙️ Admin panel — barcha bizneslarni boshqarish</a></p>` : ""}
       </div>
 
       <div class="card">
@@ -147,52 +161,20 @@ Yetkazib berish: Toshkent bo'ylab 1 kunda, 20 ming so'm...">${esc(u.businessInfo
       </div>
 
       <div class="card">
-        <h2>🔑 AI kaliti (Gemini)</h2>
-        <p class="hint"><a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a>
-        dan bepul kalit oling. Ovozli xabar, rasm va video tahlili uchun shu kerak.
-        ${process.env.GEMINI_API_KEY ? "Platformada umumiy kalit sozlangan — o'zingizniki bo'lsa, u ustun bo'ladi." : ""}</p>
-        <form method="post" action="/settings/ai">
-          <label>Gemini API kaliti</label>
-          <input name="geminiApiKey" value="${esc(u.geminiApiKey)}" placeholder="AIza...">
-          <button>Saqlash</button>
-        </form>
-      </div>
-
-      <div class="card">
-        <h2>📱 Instagram va Facebook ulash</h2>
-        <p class="hint"><a href="https://developers.facebook.com" target="_blank">developers.facebook.com</a> da App yaratib,
-        Instagram Business akkauntingizni Facebook sahifangizga ulang, so'ng quyidagilarni kiriting.</p>
-        <form method="post" action="/settings/meta">
-          <label>Page Access Token</label>
-          <input name="pageAccessToken" value="${esc(u.meta.pageAccessToken)}" placeholder="EAAG...">
-          <label>Facebook Page ID</label>
-          <input name="pageId" value="${esc(u.meta.pageId)}" placeholder="1234567890">
-          <label>Instagram Business akkaunt ID</label>
-          <input name="igUserId" value="${esc(u.meta.igUserId)}" placeholder="17841400000000000">
-          <h2 style="margin-top:22px">💚 WhatsApp ulash</h2>
-          <label>WhatsApp Token</label>
-          <input name="whatsappToken" value="${esc(u.meta.whatsappToken)}" placeholder="EAAG...">
-          <label>WhatsApp Phone Number ID</label>
-          <input name="whatsappPhoneNumberId" value="${esc(u.meta.whatsappPhoneNumberId)}" placeholder="123456789012345">
-          <button>Saqlash</button>
-        </form>
-      </div>
-
-      <div class="card">
-        <h2>🔗 Webhook sozlamalari (Meta panel uchun)</h2>
-        <p class="hint">Meta Developer panelda Webhooks bo'limiga quyidagilarni kiriting:</p>
-        <p>Callback URL: <code>https://SIZNING-DOMENINGIZ/webhook</code><br>
-        Verify Token: <code>${esc(config.verifyToken || "(.env da VERIFY_TOKEN kiriting)")}</code></p>
-        <p class="hint">Obunalar: Instagram — <code>messages</code>, <code>comments</code>;
-        Page — <code>messages</code>, <code>feed</code>;
-        WhatsApp — <code>messages</code>.</p>
+        <h2>📱 Ijtimoiy tarmoqlar holati</h2>
+        <p class="hint">Instagram, Facebook va WhatsApp ulanishini biz (texnik jamoa) sozlaymiz.
+        Ulanish holati:</p>
+        <p>
+          Instagram / Facebook: ${badge(Boolean(u.meta.pageAccessToken))}<br>
+          WhatsApp: ${badge(Boolean(u.meta.whatsappToken))}
+        </p>
+        <p class="hint">Ulanish uchun bizga murojaat qiling — Instagram/WhatsApp akkauntingiz
+        ma'lumotlarini olib, ulab beramiz. Shundan so'ng bot avtomatik ishlay boshlaydi.</p>
       </div>`,
       { user: u }
     )
   );
 });
-
-// ==== Sozlamalarni saqlash ====
 
 web.post("/settings/business", requireAuth, (req, res) => {
   updateUser(req.user.id, {
@@ -202,15 +184,103 @@ web.post("/settings/business", requireAuth, (req, res) => {
   res.redirect("/dashboard?saved=1");
 });
 
-web.post("/settings/ai", requireAuth, (req, res) => {
-  updateUser(req.user.id, {
-    geminiApiKey: String(req.body.geminiApiKey || "").trim(),
-  });
-  res.redirect("/dashboard?saved=1");
+// ==== Admin panel (dasturchi) — barcha bizneslarni sozlash ====
+
+web.get("/admin", requireAdmin, (req, res) => {
+  const users = listUsers();
+  const rows = users
+    .map((u) => {
+      const ch = Boolean(u.meta.pageAccessToken || u.meta.whatsappToken);
+      return `<tr>
+        <td>${esc(u.businessName || "-")}</td>
+        <td>${esc(u.email)}</td>
+        <td>${badge(Boolean(u.businessInfo))}</td>
+        <td>${badge(ch)}</td>
+        <td><a href="/admin/user/${u.id}">Sozlash →</a></td>
+      </tr>`;
+    })
+    .join("");
+
+  res.send(
+    page(
+      "Admin panel",
+      `<div class="card">
+        <h1>Admin panel</h1>
+        <p class="hint">Barcha ro'yxatdan o'tgan bizneslar. Har biriga Meta tokenlarini
+        siz kiritasiz — shundan so'ng ularning boti ishlay boshlaydi.
+        AI kaliti butun platforma uchun <code>.env</code> da (<code>GEMINI_API_KEY</code>) sozlangan
+        ${platformAiReady ? '<span class="badge on">tayyor</span>' : '<span class="badge off">sozlanmagan</span>'}.</p>
+        <table style="width:100%;border-collapse:collapse;font-size:14px">
+          <thead><tr style="text-align:left;border-bottom:2px solid #e5e7eb">
+            <th style="padding:8px 6px">Biznes</th><th>Email</th><th>AI o'qitilgan</th><th>Tarmoqlar</th><th></th>
+          </tr></thead>
+          <tbody>${rows || `<tr><td colspan="5" style="padding:12px">Hali biznes yo'q</td></tr>`}</tbody>
+        </table>
+      </div>`,
+      { user: req.user }
+    )
+  );
 });
 
-web.post("/settings/meta", requireAuth, (req, res) => {
-  updateUser(req.user.id, {
+web.get("/admin/user/:id", requireAdmin, (req, res) => {
+  const u = findUserById(req.params.id);
+  if (!u) return res.status(404).send("Biznes topilmadi");
+  const saved = req.query.saved;
+
+  res.send(
+    page(
+      "Biznesni sozlash",
+      `${saved ? `<div class="ok">Saqlandi ✅</div>` : ""}
+      <div class="card">
+        <p><a href="/admin">← Barcha bizneslar</a></p>
+        <h1>${esc(u.businessName || u.email)}</h1>
+        <p class="hint">${esc(u.email)}</p>
+      </div>
+
+      <div class="card">
+        <h2>📱 Instagram va Facebook</h2>
+        <p class="hint">Bu biznesning Facebook sahifasi va Instagram Business akkaunti ma'lumotlari.</p>
+        <form method="post" action="/admin/user/${u.id}/meta">
+          <label>Page Access Token</label>
+          <input name="pageAccessToken" value="${esc(u.meta.pageAccessToken)}" placeholder="EAAG...">
+          <label>Facebook Page ID</label>
+          <input name="pageId" value="${esc(u.meta.pageId)}" placeholder="1234567890">
+          <label>Instagram Business akkaunt ID</label>
+          <input name="igUserId" value="${esc(u.meta.igUserId)}" placeholder="17841400000000000">
+
+          <h2 style="margin-top:22px">💚 WhatsApp</h2>
+          <label>WhatsApp Token</label>
+          <input name="whatsappToken" value="${esc(u.meta.whatsappToken)}" placeholder="EAAG...">
+          <label>WhatsApp Phone Number ID</label>
+          <input name="whatsappPhoneNumberId" value="${esc(u.meta.whatsappPhoneNumberId)}" placeholder="123456789012345">
+
+          <h2 style="margin-top:22px">🔑 AI kaliti (ixtiyoriy)</h2>
+          <p class="hint">Bo'sh qoldirsangiz platformaning umumiy kaliti ishlatiladi.
+          Bu biznes uchun alohida Gemini kaliti kerak bo'lsagina to'ldiring.</p>
+          <label>Gemini API kaliti</label>
+          <input name="geminiApiKey" value="${esc(u.geminiApiKey)}" placeholder="AIza...">
+
+          <button>Saqlash</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>🔗 Webhook (Meta panel uchun)</h2>
+        <p>Callback URL: <code>https://SIZNING-DOMEN/webhook</code><br>
+        Verify Token: <code>${esc(config.verifyToken || "(.env da VERIFY_TOKEN)")}</code></p>
+        <p class="hint">Obunalar: Instagram — <code>messages</code>, <code>comments</code>;
+        Page — <code>messages</code>, <code>feed</code>; WhatsApp — <code>messages</code>.</p>
+      </div>`,
+      { user: req.user }
+    )
+  );
+});
+
+web.post("/admin/user/:id/meta", requireAdmin, (req, res) => {
+  const u = findUserById(req.params.id);
+  if (!u) return res.status(404).send("Biznes topilmadi");
+  updateUser(u.id, {
+    geminiApiKey: String(req.body.geminiApiKey || "").trim(),
     meta: {
       pageAccessToken: String(req.body.pageAccessToken || "").trim(),
       pageId: String(req.body.pageId || "").trim(),
@@ -219,5 +289,5 @@ web.post("/settings/meta", requireAuth, (req, res) => {
       whatsappPhoneNumberId: String(req.body.whatsappPhoneNumberId || "").trim(),
     },
   });
-  res.redirect("/dashboard?saved=1");
+  res.redirect(`/admin/user/${u.id}?saved=1`);
 });

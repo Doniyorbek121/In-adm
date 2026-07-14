@@ -8,8 +8,11 @@ import path from "node:path";
 const dataDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "data");
 rmSync(dataDir, { recursive: true, force: true });
 
-const { register, login } = await import("../src/auth.js");
-const { findUserByPlatformId, updateUser } = await import("../src/db.js");
+// Admin email'ni ai.js/config o'qishidan oldin belgilaymiz
+process.env.ADMIN_EMAILS = "boss@example.com";
+
+const { register, login, isAdmin } = await import("../src/auth.js");
+const { findUserByPlatformId, updateUser, listUsers } = await import("../src/db.js");
 
 test("ro'yxatdan o'tish va kirish ishlaydi", () => {
   const reg = register("test@example.com", "parol123", "Test Biznes");
@@ -47,4 +50,16 @@ test("platforma ID bo'yicha biznes topiladi (webhook routing)", () => {
   assert.strictEqual(findUserByPlatformId("page", "999888777")?.id, user.id);
   assert.strictEqual(findUserByPlatformId("whatsapp", "555444333")?.id, user.id);
   assert.strictEqual(findUserByPlatformId("ig", "yoq-id"), null);
+});
+
+test("admin faqat ADMIN_EMAILS ro'yxatidagilar bo'ladi", () => {
+  const { user: boss } = register("boss@example.com", "parol123", "Platforma");
+  const { user: oddiy } = register("oddiy@example.com", "parol123", "Do'kon 2");
+  assert.strictEqual(isAdmin(boss), true);
+  assert.strictEqual(isAdmin(oddiy), false);
+});
+
+test("admin barcha bizneslar ro'yxatini ko'ra oladi", () => {
+  const all = listUsers();
+  assert.ok(all.length >= 3);
 });

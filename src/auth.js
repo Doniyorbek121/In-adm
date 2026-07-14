@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { config } from "./config.js";
 import {
   createUser,
   findUserByEmail,
@@ -63,5 +64,18 @@ export function attachUser(req, _res, next) {
 /** Faqat kirgan foydalanuvchilar uchun sahifalar */
 export function requireAuth(req, res, next) {
   if (!req.user) return res.redirect("/login");
+  next();
+}
+
+/** Foydalanuvchi admin (dasturchi) ekanmi? */
+export function isAdmin(user) {
+  if (!user) return false;
+  return config.adminEmails.includes(user.email);
+}
+
+/** Faqat admin uchun sahifalar */
+export function requireAdmin(req, res, next) {
+  if (!req.user) return res.redirect("/login");
+  if (!isAdmin(req.user)) return res.status(403).send("Ruxsat yo'q");
   next();
 }
