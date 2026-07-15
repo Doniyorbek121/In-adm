@@ -1,4 +1,11 @@
 import { Router } from "express";
+import crypto from "node:crypto";
+import {
+  oauthAvailable,
+  authUrl,
+  fetchPages,
+  subscribePage,
+} from "../oauth.js";
 import {
   register,
   login,
@@ -177,7 +184,9 @@ web.get("/dashboard", requireAuth, (req, res) => {
     { done: Boolean(u.businessInfo), label: "AI'ni biznesingizga o'rgating (pastda)" },
     {
       done: Boolean(u.meta.pageAccessToken || u.meta.whatsappToken),
-      label: "Ijtimoiy tarmoqlarni ulang (biz sozlaymiz — bog'laning)",
+      label: oauthAvailable
+        ? "Instagram/Facebook'ni ulang (pastdagi tugma bilan)"
+        : "Ijtimoiy tarmoqlarni ulang (biz sozlaymiz — bog'laning)",
     },
     { done: sub.active, label: "Obunani faollashtiring" },
   ];
@@ -198,6 +207,7 @@ web.get("/dashboard", requireAuth, (req, res) => {
     page(
       "Boshqaruv",
       `${saved ? `<div class="ok">Saqlandi ✅</div>` : ""}
+      ${req.query.connected ? `<div class="ok">Instagram/Facebook muvaffaqiyatli ulandi 🎉 Endi bot mijozlaringizga javob beradi.</div>` : ""}
       ${subBanner}
       ${checklist}
 
@@ -261,12 +271,28 @@ Yetkazib berish: Toshkent bo'ylab 1 kunda, 20 ming so'm...">${esc(u.businessInfo
       </div>
 
       <div class="card">
-        <h2>📱 Ijtimoiy tarmoqlar holati</h2>
-        <p>
-          Instagram / Facebook: ${badge(Boolean(u.meta.pageAccessToken))}<br>
-          WhatsApp: ${badge(Boolean(u.meta.whatsappToken))}
-        </p>
-        <p class="hint">Ulanishni texnik jamoa sozlaydi — bizga murojaat qiling.</p>
+        <h2>📱 Instagram va Facebook</h2>
+        <p>Holat: ${badge(Boolean(u.meta.pageAccessToken))}${u.meta.igUserId ? " · Instagram ulangan ✅" : ""}</p>
+        ${
+          oauthAvailable
+            ? u.meta.pageAccessToken
+              ? `<p class="hint">Sahifangiz ulangan. Boshqa sahifaga ulash yoki uzish:</p>
+                 <a href="/connect/facebook"><button type="button">Qayta ulash</button></a>
+                 <form method="post" action="/connect/disconnect" style="display:inline">
+                   <button style="background:#6b7280">Uzish</button>
+                 </form>`
+              : `<p class="hint">Instagram akkauntingizni bir tugma bilan ulang. Instagram <b>Business</b> bo'lib,
+                 Facebook sahifasiga ulangan bo'lishi kerak.</p>
+                 <a href="/connect/facebook"><button type="button">🔵 Facebook bilan ulash</button></a>`
+            : `<p class="hint">Ulanish holati: Instagram/Facebook ${badge(Boolean(u.meta.pageAccessToken))}.
+               Ulash uchun texnik jamoaga murojaat qiling.</p>`
+        }
+      </div>
+
+      <div class="card">
+        <h2>💚 WhatsApp</h2>
+        <p>Holat: ${badge(Boolean(u.meta.whatsappToken))}</p>
+        <p class="hint">WhatsApp ulanishini texnik jamoa sozlaydi — bizga murojaat qiling.</p>
       </div>`,
       { user: u }
     )
@@ -336,6 +362,117 @@ web.post("/settings/business", requireAuth, (req, res) => {
   });
   res.redirect("/dashboard?saved=1");
 });
+
+// ==== Facebook bilan ulash (OAuth self-service) ====
+
+// state -> { userId, at } — CSRF himoyasi (10 daqiqa amal qiladi)
+const oauthStates = new Map();
+// userId -> sahifalar ro'yxati (bir nechta sahifa bo'lsa tanlash uchun)
+const pendingPages = new Map();
+
+function connectPage(user, page) {
+  updateUser(user.id, {
+    meta: {
+      pageAccessToken: page.access_token,
+      pageId: page.id,
+      igUserId: page.igUserId || "",
+    },
+  });
+  // Sahifani webhooklarga ulaymiz (xato bo'lsa ham davom etamiz)
+  subscribePage(page).catch(() => {});
+}
+
+web.get("/connect/facebook", requireAuth, (req, res) => {
+  if (!oauthAvailable) return res.redirect("/dashboard");
+  const state = crypto.randomBytes(16).toString("hex");
+  oauthStates.set(state, { userId: req.user.id, at: Date.now() });
+  res.redirect(authUrl(state));
+});
+
+web.get("/connect/facebook/callback", requireAuth, async (req, res) => {
+  const { code, state, error: fbError } = req.query;
+  const entry = oauthStates.get(String(state));
+  oauthStates.delete(String(state));
+
+  if (fbError) {
+    return res.send(connectResult(req.user, "Ulanish bekor qilindi yoki rad etildi."));
+  }
+  if (!entry || entry.userId !== req.user.id || Date.now() - entry.at > 600000) {
+    return res.send(connectResult(req.user, "Xavfsizlik tekshiruvi muvaffaqiyatsiz — qaytadan urinib ko'ring."));
+  }
+
+  const result = await fetchPages(String(code || ""));
+  if (result.error) return res.send(connectResult(req.user, result.error));
+  const pages = result.pages;
+
+  if (pages.length === 0) {
+    return res.send(
+      connectResult(
+        req.user,
+        "Facebook sahifasi topilmadi. Instagram'ingiz Business bo'lib, Facebook sahifasiga ulangan bo'lishi kerak."
+      )
+    );
+  }
+  if (pages.length === 1) {
+    connectPage(req.user, pages[0]);
+    return res.redirect("/dashboard?connected=1");
+  }
+
+  // Bir nechta sahifa — foydalanuvchi tanlaydi
+  pendingPages.set(req.user.id, { pages, at: Date.now() });
+  const options = pages
+    .map(
+      (p, i) =>
+        `<label style="display:block;padding:10px;border:1px solid #d1d5db;border-radius:8px;margin:6px 0;font-weight:400">
+          <input type="radio" name="idx" value="${i}" ${i === 0 ? "checked" : ""} style="width:auto">
+          <b>${esc(p.name)}</b>${p.igUsername ? ` · Instagram: @${esc(p.igUsername)}` : " · (Instagram ulanmagan)"}
+        </label>`
+    )
+    .join("");
+  res.send(
+    page(
+      "Sahifani tanlang",
+      `<div class="card">
+        <h1>Qaysi sahifani ulaymiz?</h1>
+        <p class="hint">Sizda bir nechta Facebook sahifasi bor. Botni qaysi biriga ulashni tanlang:</p>
+        <form method="post" action="/connect/facebook/select">
+          ${options}
+          <button>Ulash</button>
+        </form>
+      </div>`,
+      { user: req.user }
+    )
+  );
+});
+
+web.post("/connect/facebook/select", requireAuth, (req, res) => {
+  const pending = pendingPages.get(req.user.id);
+  pendingPages.delete(req.user.id);
+  if (!pending) return res.redirect("/dashboard");
+  const page = pending.pages[Number(req.body.idx)];
+  if (!page) return res.redirect("/dashboard");
+  connectPage(req.user, page);
+  res.redirect("/dashboard?connected=1");
+});
+
+web.post("/connect/disconnect", requireAuth, (req, res) => {
+  updateUser(req.user.id, {
+    meta: { pageAccessToken: "", pageId: "", igUserId: "" },
+  });
+  res.redirect("/dashboard?saved=1");
+});
+
+function connectResult(user, error) {
+  return page(
+    "Ulanish",
+    `<div class="card">
+      <h1>Ulanish</h1>
+      <div class="error">${esc(error)}</div>
+      <p><a href="/dashboard">← Boshqaruvga qaytish</a></p>
+    </div>`,
+    { user }
+  );
+}
 
 // ==== Akkaunt sahifasi (parol o'zgartirish) ====
 

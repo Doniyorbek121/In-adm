@@ -14,6 +14,7 @@ Instagram, Facebook va WhatsApp uchun **veb-platforma ko'rinishidagi AI avtomatl
 | 🎤 **Ovozli xabarlar** | AI ovozni eshitib, mazmuniga javob beradi (Gemini) |
 | 📸 **Rasm va video** | AI ko'rib tahlil qiladi — mahsulot rasmi bo'lsa narxini aytadi |
 | 🗣️ **Suhbat tarixi** | Har mijoz bilan kontekst saqlanadi — tabiiy muloqot |
+| 🔵 **Facebook bilan ulash** | Tadbirkor Instagram'ini bir tugma bilan o'zi ulaydi (OAuth, tokenlar avtomatik) |
 | 👥 **Multi-tenant** | Bitta serverda istalgancha biznes — har birining o'z kanallari va AI bilimi |
 | 💳 **Oylik obuna** | 14 kun bepul sinov, so'ng oylik to'lov; obuna tugasa bot avtomatik to'xtaydi |
 | 🎤 **Ovozli javob** | WhatsApp'da matn bilan birga ovozli javob (Google TTS, ixtiyoriy) |
@@ -78,9 +79,11 @@ Kerak bo'lsa, alohida biznesga o'z Gemini kalitini ham berish mumkin (bo'sh qold
 
 1. **Ro'yxatdan o'ting** — saytda email va parol bilan. Darhol **14 kunlik bepul sinov** boshlanadi.
 2. **AI'ni o'rgating** — panelda biznesingiz haqida yozing: mahsulotlar, narxlar, manzil, ish vaqti, yetkazib berish, to'lovlar, savol-javoblar. Oddiy matn, kod kerak emas.
-3. **Ijtimoiy tarmoqlarni ulash** uchun bizga murojaat qiling — Instagram/WhatsApp'ingizni biz ulaymiz.
+3. **Instagram'ni ulang** — dashboarddagi **"🔵 Facebook bilan ulash"** tugmasini bosasiz, Facebook'da ruxsat berasiz, tizim tokenlarni o'zi oladi. (WhatsApp uchun texnik jamoaga murojaat.)
 4. Bo'ldi — mijozlaringizga AI javob bera boshlaydi.
 5. **Obunani to'lang** — sinov tugagach, `/billing` sahifasidan tarifni tanlab to'lang, aks holda bot to'xtaydi.
+
+> "Facebook bilan ulash" tugmasi platformada `FB_APP_ID` sozlangan bo'lsa ko'rinadi. Aks holda tokenlarni admin qo'lda kiritadi.
 
 ## Obuna (oylik to'lov)
 

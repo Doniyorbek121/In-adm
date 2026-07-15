@@ -11,6 +11,7 @@ const { register, changePassword, login } = await import("../src/auth.js");
 const sub = await import("../src/subscription.js");
 const eng = await import("../src/engagement.js");
 const { isDuplicate } = await import("../src/dedup.js");
+const oauth = await import("../src/oauth.js");
 
 function newUser(email) {
   return register(email, "parol123", "Test").user;
@@ -96,4 +97,19 @@ test("to'g'ri joriy parol bilan parol o'zgaradi", () => {
   const ok = changePassword(u, "parol123", "yangiparol");
   assert.ok(ok.ok);
   assert.ok(login("pw@x.uz", "yangiparol").token);
+});
+
+// ==== Facebook OAuth ====
+
+test("OAuth kalitlarsiz o'chiq bo'ladi", () => {
+  // Testda FB_APP_ID/BASE_URL yo'q — oauthAvailable false bo'lishi kerak
+  assert.strictEqual(oauth.oauthAvailable, false);
+});
+
+test("authUrl to'g'ri Facebook manzilini quradi", () => {
+  const url = oauth.authUrl("test-state");
+  assert.match(url, /facebook\.com/);
+  assert.match(url, /dialog\/oauth/);
+  assert.match(url, /state=test-state/);
+  assert.match(url, /instagram_manage_messages/);
 });

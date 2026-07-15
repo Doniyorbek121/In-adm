@@ -11,7 +11,22 @@ export const config = {
     .split(",")
     .map((e) => e.toLowerCase().trim())
     .filter(Boolean),
+  // Facebook OAuth ("Facebook bilan ulash") uchun
+  fbAppId: process.env.FB_APP_ID || "",
+  // OAuth redirect uchun tashqi manzil, masalan: https://bot.example.uz
+  baseUrl: (process.env.BASE_URL || "").replace(/\/$/, ""),
 };
+
+// "Facebook bilan ulash" uchun so'raladigan ruxsatlar
+export const OAUTH_SCOPES = [
+  "pages_show_list",
+  "pages_manage_metadata",
+  "pages_messaging",
+  "instagram_basic",
+  "instagram_manage_messages",
+  "instagram_manage_comments",
+  "business_management",
+].join(",");
 
 export const graphUrl = (path) =>
   `https://graph.facebook.com/${config.graphApiVersion}/${path}`;

@@ -138,6 +138,8 @@ function checkConfig() {
   if (!config.adminEmails.length) warn.push("ADMIN_EMAILS yo'q — hech kim admin panelga kira olmaydi");
   if (!process.env.GEMINI_API_KEY && !process.env.ANTHROPIC_API_KEY)
     warn.push("AI kaliti (GEMINI_API_KEY) yo'q — bot kalit so'z rejimida ishlaydi");
+  if (!config.fbAppId || !config.baseUrl)
+    warn.push("FB_APP_ID/BASE_URL yo'q — 'Facebook bilan ulash' o'chiq (tokenlar admin panelda qo'lda kiritiladi)");
   for (const w of warn) console.warn("⚠️  " + w);
 }
 

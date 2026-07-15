@@ -3,6 +3,26 @@ import { graphUrl } from "./config.js";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
+ * Graph API'ga GET so'rov (OAuth va sahifa/IG ma'lumotlarini olish uchun).
+ * params — query obyekt. Xato bo'lsa { error } qaytaradi.
+ */
+export async function graphGet(path, params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  try {
+    const res = await fetch(graphUrl(`${path}?${qs}`));
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      console.error(`Graph GET xatosi [${path}] (${res.status}):`, JSON.stringify(data).slice(0, 300));
+      return { error: data.error || { message: `HTTP ${res.status}` } };
+    }
+    return data;
+  } catch (err) {
+    console.error(`Graph GET tarmoq xatosi [${path}]:`, err.message);
+    return { error: { message: err.message } };
+  }
+}
+
+/**
  * Meta Graph API'ga POST so'rov yuboradi. Tarmoq/server xatosida
  * eksponensial kutish bilan qayta uriniladi (2s, 4s). Xato bo'lsa null.
  * Bitta xabar xato bo'lsa butun server yiqilmasligi kerak.
