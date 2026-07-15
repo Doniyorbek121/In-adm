@@ -1,5 +1,6 @@
 import { generateReply } from "./ai.js";
 import { isActive } from "./subscription.js";
+import { notifyHandoff } from "./notify.js";
 import {
   recordMessage,
   isHandoffRequest,
@@ -38,6 +39,7 @@ export async function processMessage(tenant, channel, chatKey, { text = "", medi
   // 4. Mijoz operatorni chaqirdimi
   if (isHandoffRequest(text)) {
     startHandoff(tenant, channel, chatKey);
+    notifyHandoff(tenant, channel, chatKey).catch(() => {}); // Telegram (bo'lsa)
     console.log(`[${channel}] ${tenant.businessName}: ${chatKey} operator chaqirdi`);
     return { reply: HANDOFF_REPLY };
   }

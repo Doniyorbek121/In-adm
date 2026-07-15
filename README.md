@@ -19,7 +19,9 @@ Instagram, Facebook va WhatsApp uchun **veb-platforma ko'rinishidagi AI avtomatl
 | 💳 **Oylik obuna** | 14 kun bepul sinov, so'ng oylik to'lov; obuna tugasa bot avtomatik to'xtaydi |
 | 🎤 **Ovozli javob** | WhatsApp'da matn bilan birga ovozli javob (Google TTS, ixtiyoriy) |
 | 📊 **Statistika** | Xabarlar, noyob mijozlar, buyurtma so'rovlari, kanal va kun kesimida |
+| 🧑‍🤝‍🧑 **Mini-CRM** | Oxirgi mijozlar ro'yxati — kim, qaysi kanaldan, nima yozgani |
 | 👤 **Operator chaqirish** | Mijoz "operator" desa bot jim bo'ladi, panelda murojaat ko'rinadi |
+| 🔔 **Telegram bildirishnoma** | Operator chaqirilganda biznes egasiga Telegram'ga xabar keladi |
 | ⚙️ **Admin panel** | Dasturchi barcha bizneslarni ko'radi, tokenlar kiritadi, to'lovni tasdiqlaydi |
 | 🛡️ **Zaxira rejim** | AI ishlamasa kalit so'z qoidalari (`rules.json`) ishlaydi — mijoz javobsiz qolmaydi |
 
@@ -54,6 +56,13 @@ npm start
 ```
 
 Server startda yetishmayotgan sozlamalarni ogohlantiradi. `GET /health` orqali tirikligini tekshirish mumkin.
+
+**Production'ga joylash** (Docker, PM2, HTTPS, backup): **[DEPLOY.md](DEPLOY.md)**. Eng oson yo'l:
+
+```bash
+cp .env.example .env   # to'ldiring
+docker compose up -d --build
+```
 
 `.env` da to'ldiring:
 - `VERIFY_TOKEN`, `APP_SECRET` — Meta webhook uchun
@@ -134,8 +143,11 @@ src/
   engagement.js         — statistika + operator chaqirish (handoff)
   tts.js                — Google TTS bilan ovozli javob (ixtiyoriy)
   media.js              — IG/WhatsApp mediani yuklab olish (base64)
+  oauth.js              — "Facebook bilan ulash" (OAuth, tokenlarni avtomatik olish)
+  notify.js             — Telegram bildirishnomalari
+  dedup.js              — takroriy webhook xabarlarini filtrlash
   autoReply.js          — kalit so'z qoidalari (zaxira rejim)
-  graph.js              — Meta Graph API so'rovlari
+  graph.js              — Meta Graph API so'rovlari (retry bilan)
   handlers/             — Instagram, Facebook, WhatsApp hodisalari
   services/             — javob yuborish (matn + ovoz, har biznes tokeni bilan)
 rules.json              — zaxira javob qoidalari

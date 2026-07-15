@@ -33,15 +33,37 @@ export function register(email, password, businessName) {
   return { user };
 }
 
+// Login urinishlari (brute-force himoyasi): email -> { count, until }
+const loginAttempts = new Map();
+const MAX_ATTEMPTS = 5;
+const LOCK_MS = 15 * 60 * 1000; // 15 daqiqa
+
 export function login(email, password) {
+  const key = String(email || "").toLowerCase().trim();
+  const rec = loginAttempts.get(key);
+  if (rec && rec.until > Date.now()) {
+    const mins = Math.ceil((rec.until - Date.now()) / 60000);
+    return { error: `Juda ko'p urinish. ${mins} daqiqadan so'ng qayta urinib ko'ring.` };
+  }
+
   const user = findUserByEmail(email);
-  if (!user) return { error: "Email yoki parol noto'g'ri" };
-  const hash = hashPassword(password || "", user.salt);
-  const ok = crypto.timingSafeEqual(
-    Buffer.from(hash),
-    Buffer.from(user.passwordHash)
-  );
-  if (!ok) return { error: "Email yoki parol noto'g'ri" };
+  const ok =
+    user &&
+    crypto.timingSafeEqual(
+      Buffer.from(hashPassword(password || "", user.salt)),
+      Buffer.from(user.passwordHash)
+    );
+
+  if (!ok) {
+    const count = (rec?.until > Date.now() ? rec.count : (rec?.count || 0)) + 1;
+    loginAttempts.set(key, {
+      count,
+      until: count >= MAX_ATTEMPTS ? Date.now() + LOCK_MS : 0,
+    });
+    return { error: "Email yoki parol noto'g'ri" };
+  }
+
+  loginAttempts.delete(key); // muvaffaqiyatli — hisoblagichni tozalaymiz
   return { user, token: createSession(user.id) };
 }
 

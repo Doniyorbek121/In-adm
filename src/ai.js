@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { findReply } from "./autoReply.js";
+import { persist } from "./db.js";
 
 // Global (zaxira) kalitlar — foydalanuvchi o'z kalitini kiritmagan bo'lsa ishlatiladi
 const globalGeminiKey = process.env.GEMINI_API_KEY || "";
@@ -10,9 +11,9 @@ const CLAUDE_MODEL = process.env.AI_MODEL || "claude-opus-4-8";
 
 const anthropicClient = globalAnthropicKey ? new Anthropic() : null;
 
-// Suhbat tarixi: "tenantId:mijozId" -> [{role, text}]
-const conversations = new Map();
+// Suhbat tarixi tenant.chats[chatKey] da saqlanadi (bazada, server o'chsa yo'qolmaydi).
 const MAX_HISTORY = 10;
+const MAX_CHATS = 300; // bir biznesda saqlanadigan suhbatlar soni
 
 function buildSystemPrompt(tenant) {
   return `Sen "${tenant.businessName || "biznes"}" nomli biznesning mijozlar bilan ishlash bo'yicha yordamchisisan. Instagram, Facebook va WhatsApp orqali yozgan mijozlarga javob berasan.
@@ -145,8 +146,8 @@ export async function generateReply(tenant, chatKey, { text = "", media = [] } =
     return findReply(text) ;
   }
 
-  const key = `${tenant.id}:${chatKey}`;
-  const history = conversations.get(key) || [];
+  tenant.chats ||= {};
+  const history = tenant.chats[chatKey] || [];
   const systemPrompt = buildSystemPrompt(tenant);
 
   try {
@@ -158,12 +159,18 @@ export async function generateReply(tenant, chatKey, { text = "", media = [] } =
     if (!reply) return findReply(text);
 
     const summary = text || "[media xabar]";
-    const updated = [
+    tenant.chats[chatKey] = [
       ...history,
       { role: "user", text: summary },
       { role: "assistant", text: reply },
     ].slice(-MAX_HISTORY);
-    conversations.set(key, updated);
+
+    // Suhbatlar soni cheklovi — eng eskilarini o'chiramiz (xotira/fayl o'smasligi uchun)
+    const keys = Object.keys(tenant.chats);
+    if (keys.length > MAX_CHATS) {
+      for (const k of keys.slice(0, keys.length - MAX_CHATS)) delete tenant.chats[k];
+    }
+    persist();
 
     return reply;
   } catch (error) {

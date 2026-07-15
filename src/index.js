@@ -4,7 +4,7 @@ import { config } from "./config.js";
 import { attachUser } from "./auth.js";
 import { web } from "./web/routes.js";
 import { page } from "./web/layout.js";
-import { findUserByPlatformId } from "./db.js";
+import { findUserByPlatformId, persist } from "./db.js";
 import { handleInstagramEntry } from "./handlers/instagram.js";
 import { handleFacebookEntry } from "./handlers/facebook.js";
 import { handleWhatsAppEntry } from "./handlers/whatsapp.js";
@@ -143,9 +143,23 @@ function checkConfig() {
   for (const w of warn) console.warn("⚠️  " + w);
 }
 
-app.listen(config.port, () => {
+const server = app.listen(config.port, () => {
   checkConfig();
   console.log(`Server ${config.port}-portda ishga tushdi 🚀`);
   console.log(`Admin panel:    http://localhost:${config.port}/`);
   console.log(`Webhook manzil: http://localhost:${config.port}/webhook`);
 });
+
+// Server to'xtatilganda bazani saqlab, tozalab chiqamiz
+function shutdown(signal) {
+  console.log(`\n${signal} — bazani saqlab, to'xtatilmoqda...`);
+  try {
+    persist();
+  } catch (err) {
+    console.error("Saqlashda xato:", err.message);
+  }
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 5000).unref();
+}
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

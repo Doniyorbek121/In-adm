@@ -39,7 +39,9 @@ function matches(text, list) {
   return list.some((kw) => lower.includes(kw));
 }
 
-/** Har bir kiruvchi xabarni statistikaga yozadi */
+const MAX_LEADS = 100;
+
+/** Har bir kiruvchi xabarni statistika va mijozlar ro'yxatiga (CRM) yozadi */
 export function recordMessage(user, channel, chatKey, text) {
   const s = user.stats;
   s.messages = (s.messages || 0) + 1;
@@ -51,7 +53,34 @@ export function recordMessage(user, channel, chatKey, text) {
   s.days ||= {};
   s.days[day] = (s.days[day] || 0) + 1;
   if (matches(text, ORDER_KEYWORDS)) s.orders = (s.orders || 0) + 1;
+
+  // Mijozlar ro'yxati (mini-CRM) — eng yangisi tepada
+  user.leads ||= [];
+  const snippet = (text || "[media xabar]").slice(0, 80);
+  const existing = user.leads.find((l) => l.chatKey === chatKey && l.channel === channel);
+  if (existing) {
+    existing.lastText = snippet;
+    existing.lastAt = new Date().toISOString();
+    existing.count = (existing.count || 1) + 1;
+    user.leads = user.leads.filter((l) => l !== existing);
+    user.leads.unshift(existing);
+  } else {
+    user.leads.unshift({
+      chatKey,
+      channel,
+      lastText: snippet,
+      lastAt: new Date().toISOString(),
+      count: 1,
+    });
+  }
+  user.leads = user.leads.slice(0, MAX_LEADS);
+
   persist();
+}
+
+/** Dashboard uchun oxirgi mijozlar */
+export function recentLeads(user, n = 15) {
+  return (user.leads || []).slice(0, n);
 }
 
 /** Statistikani panelga qulay ko'rinishda qaytaradi */

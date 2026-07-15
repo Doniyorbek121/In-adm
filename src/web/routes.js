@@ -23,8 +23,10 @@ import {
   statsSummary,
   pendingHandoffs,
   resolveHandoff,
+  recentLeads,
 } from "../engagement.js";
 import { ttsAvailable } from "../tts.js";
+import { telegramAvailable, sendTelegram } from "../notify.js";
 import { page, esc } from "./layout.js";
 
 export const web = Router();
@@ -144,6 +146,7 @@ web.get("/dashboard", requireAuth, (req, res) => {
   const sub = statusInfo(u);
   const stats = statsSummary(u);
   const pending = pendingHandoffs(u);
+  const leads = recentLeads(u);
 
   // Obuna banneri
   const subBanner = sub.active
@@ -233,6 +236,23 @@ web.get("/dashboard", requireAuth, (req, res) => {
       </div>
 
       <div class="card">
+        <h2>🧑‍🤝‍🧑 Oxirgi mijozlar</h2>
+        ${
+          leads.length
+            ? `<div style="font-size:14px">${leads
+                .map(
+                  (l) =>
+                    `<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid #eee">
+                      <span><b>${esc(l.channel)}</b> · ${esc(l.chatKey)}<br><span style="color:var(--muted)">${esc(l.lastText)}</span></span>
+                      <span style="color:var(--muted);white-space:nowrap;text-align:right">${new Date(l.lastAt).toLocaleString("uz")}<br>${l.count} xabar</span>
+                    </div>`
+                )
+                .join("")}</div>`
+            : `<p class="hint">Hali mijoz yozmagan.</p>`
+        }
+      </div>
+
+      <div class="card">
         <h2>👤 Operator chaqiruvlari</h2>
         <p class="hint">Mijoz "operator" yoki "odam bilan gaplashaman" desa, bot 2 soatga jim bo'ladi
         va bu yerda ko'rinadi. Siz Instagram/WhatsApp ilovasidan javob berasiz. Tugagach "Hal qilindi" bosing.</p>
@@ -267,6 +287,22 @@ Yetkazib berish: Toshkent bo'ylab 1 kunda, 20 ming so'm...">${esc(u.businessInfo
             Ovozli javobni yoqish
           </label>
           <button>Saqlash</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>🔔 Telegram bildirishnoma</h2>
+        <p class="hint">Operator chaqirilganda Telegram'ingizga xabar keladi.
+        ${
+          telegramAvailable
+            ? `Sozlash: Telegram'da <b>@userinfobot</b> ga yozing → sizga <b>Chat ID</b> (raqam) beradi → shuni pastga kiriting.`
+            : "<b>Diqqat:</b> platformada Telegram bot sozlanmagan — administrator bilan bog'laning."
+        }</p>
+        <form method="post" action="/settings/telegram">
+          <label>Telegram Chat ID</label>
+          <input name="telegramChatId" value="${esc(u.settings?.telegramChatId || "")}" placeholder="123456789">
+          <button>Saqlash</button>
+          ${u.settings?.telegramChatId && telegramAvailable ? `<button formaction="/settings/telegram/test" style="background:#6b7280">Sinov xabari</button>` : ""}
         </form>
       </div>
 
@@ -309,6 +345,24 @@ web.post("/settings/voice", requireAuth, (req, res) => {
 web.post("/handoff/resolve", requireAuth, (req, res) => {
   resolveHandoff(req.user, String(req.body.id || ""));
   res.redirect("/dashboard");
+});
+
+web.post("/settings/telegram", requireAuth, (req, res) => {
+  updateUser(req.user.id, {
+    settings: {
+      ...req.user.settings,
+      telegramChatId: String(req.body.telegramChatId || "").trim(),
+    },
+  });
+  res.redirect("/dashboard?saved=1");
+});
+
+web.post("/settings/telegram/test", requireAuth, async (req, res) => {
+  const ok = await sendTelegram(
+    req.user.settings?.telegramChatId,
+    `✅ Sinov xabari — "${req.user.businessName}" bildirishnomalari ishlayapti.`
+  );
+  res.redirect(ok ? "/dashboard?saved=1" : "/dashboard");
 });
 
 // ==== Obuna / to'lov sahifasi ====

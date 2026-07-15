@@ -60,6 +60,17 @@ test("xabarlar va noyob mijozlar hisoblanadi", () => {
   assert.strictEqual(s.orders, 1); // "buyurtma" so'zi
 });
 
+test("mijozlar ro'yxati (CRM) yangilanadi va eng yangisi tepada", () => {
+  const u = newUser("crm@x.uz");
+  eng.recordMessage(u, "whatsapp", "111", "birinchi");
+  eng.recordMessage(u, "instagram", "222", "ikkinchi");
+  eng.recordMessage(u, "whatsapp", "111", "yana yozdim");
+  const leads = eng.recentLeads(u);
+  assert.strictEqual(leads[0].chatKey, "111"); // eng oxirgi yozgan tepada
+  assert.strictEqual(leads[0].count, 2);
+  assert.strictEqual(leads.length, 2); // 111 takrorlanmaydi
+});
+
 // ==== Operator chaqirish ====
 
 test("operator so'zi handoff sifatida aniqlanadi", () => {
@@ -112,4 +123,13 @@ test("authUrl to'g'ri Facebook manzilini quradi", () => {
   assert.match(url, /dialog\/oauth/);
   assert.match(url, /state=test-state/);
   assert.match(url, /instagram_manage_messages/);
+});
+
+// ==== Login brute-force himoyasi ====
+
+test("5 marta xato parol kiritilsa akkaunt vaqtincha bloklanadi", () => {
+  newUser("lock@x.uz");
+  for (let i = 0; i < 5; i++) login("lock@x.uz", "notogri");
+  const res = login("lock@x.uz", "parol123"); // endi to'g'ri parol ham bloklangan
+  assert.match(res.error, /urinish/);
 });

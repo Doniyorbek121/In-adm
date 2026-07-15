@@ -34,7 +34,8 @@ function normalizeUser(u) {
     trialEndsAt: new Date(Date.now() + TRIAL_DAYS * 86400000).toISOString(),
     expiresAt: null,
   };
-  u.settings ||= { voiceReplies: false };
+  u.settings ||= { voiceReplies: false, telegramChatId: "" };
+  if (u.settings.telegramChatId === undefined) u.settings.telegramChatId = "";
   u.stats ||= {
     messages: 0,
     customers: {},
@@ -44,6 +45,8 @@ function normalizeUser(u) {
   };
   u.handoffs ||= [];
   u.manualChats ||= {};
+  u.leads ||= []; // oxirgi mijozlar (mini-CRM)
+  u.chats ||= {}; // suhbat tarixi: chatKey -> [{role, text}]
   return u;
 }
 
